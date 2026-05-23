@@ -14,7 +14,7 @@ func FindBestOffset(audioTimeline, subTimeline []bool, maxOffsetSlots int) (int,
 	// Slide the subtitle timeline from -maxOffsetSlots to +maxOffsetSlots
 	for offset := -maxOffsetSlots; offset <= maxOffsetSlots; offset++ {
 		score := calculateOverlapSocre(audioTimeline, subTimeline, offset)
-		fmt.Printf("Testing offset: %+d s | Match score: %.2f%%\n", offset, score*100)
+		fmt.Printf("Testing offset: %+d ms | Match score: %.2f%%\n", offset, score*100)
 
 		// If the offset yields a better match than previous attempts, save it
 		if score > bestScore {
@@ -56,7 +56,7 @@ func calculateOverlapSocre(audio, subs []bool, offset int) float64 {
 	return float64(matches) / float64(totalSubSlots)
 }
 
-func main() {
+/* func main() {
 	// Assume 1 slot = 1 second
 	audioTimeline := []bool{
 		false, false, false, true, true, true, // 0 to 5 seconds
@@ -83,4 +83,4 @@ func main() {
 	fmt.Println("ALGORITHM RESULT: ")
 	fmt.Printf("Subtitles shifted by: %+d slots.\n", bestOffset)
 	fmt.Printf("Match condience: %.2f%%\n", matchConfidence*100)
-}
+} */
