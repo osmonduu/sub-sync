@@ -1,3 +1,6 @@
 sub-sync
 *.exe
 *.wav
+*.ass
+*.mp4
+*.vtt

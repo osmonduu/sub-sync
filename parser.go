@@ -41,20 +41,24 @@ func CleanText(text string) string {
 
 // ParseAssFile opens and scans each line of the .ass file to extract only the raw dialogue lines.
 // It returns a slice of DialogueLine structs which hold the each line's subtitle and start and end timestamps.
-func ParseAssFile(filePath string) ([]DialogueLine, error) {
+// It also returns a slice of every line in the subtitle file.
+func ParseAssFile(filePath string) ([]DialogueLine, []string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer file.Close()
 
 	var lines []DialogueLine
+	var rawLines []string
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Only process lines that represent subtitle dialogue
+		rawLines = append(rawLines, line)
+
+		// If not a dialogue line, do not process
 		if !strings.HasPrefix(line, "Dialogue:") {
 			continue
 		}
@@ -95,7 +99,7 @@ func ParseAssFile(filePath string) ([]DialogueLine, error) {
 		})
 	}
 	// Return any errors (if any) that occured during the scanning
-	return lines, scanner.Err()
+	return lines, rawLines, scanner.Err()
 }
 
 // GenerateSubTimeline converts the parsed subtitle lines into a []bool timeline,
@@ -140,22 +144,68 @@ func GenerateSubTimeline(lines []DialogueLine, resolution time.Duration) []bool 
 	return timeline
 }
 
-func main() {
-	fmt.Println("Starting .ass Subtitle Parser...")
-	fmt.Println("--------------------------------------")
+// FormatAssTimestamp converts a time.Duration into an .ass compliant "H:MM:SS.CS" (centiseconds) string.
+func FormatAssTimestamp(d time.Duration) string {
+	// If applying the offset didn't push the negative timestamp to a positive timestamp,
+	// clamp the 0 because .ass string format "H:MM:SS.cs" cannot represent negative time.
+	if d < 0 {
+		return "0:00:00.00"
+	}
 
-	dialogueLines, err := ParseAssFile("test.ass")
+	totalSeconds := int(d.Seconds())
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	// Centiseconds are 1/100th of a second.
+	// Milliseconds / 10 is equivalent to a centisecond.
+	centiseconds := (d.Milliseconds() % 1000) / 10
+
+	return fmt.Sprintf("%d:%02d:%02d.%02d", hours, minutes, seconds, centiseconds)
+}
+
+// SaveSyncedAssFile writes the modified subtitles out to a new file.
+func SaveSyncedAssFile(outputPath string, rawLines []string, dialogueLines []DialogueLine, offset time.Duration) error {
+	file, err := os.Create(outputPath)
 	if err != nil {
-		fmt.Printf("Error reading files: %v\n", err)
-		return
+		return err
 	}
+	defer file.Close()
 
-	// Print our parsed structs to verify accuracy
-	for idx, d := range dialogueLines {
-		fmt.Printf("Line %d\n", idx+1)
-		fmt.Printf("	Cleaned Text: %s\n", d.Text)
-		fmt.Printf("	Start Time	: %v\n", d.Start)
-		fmt.Printf("	End Time	: %v\n", d.End)
-		fmt.Println()
+	writer := bufio.NewWriter(file)
+	dialogueIdx := 0
+
+	for _, rawLine := range rawLines {
+		// If it isn't a Dialogue line, write the original raw text back out.
+		if !strings.HasPrefix(rawLine, "Dialogue:") || dialogueIdx >= len(dialogueLines) {
+			writer.WriteString(rawLine)
+			writer.WriteString("\n")
+			continue
+		}
+		currentDialogue := dialogueLines[dialogueIdx]
+		dialogueIdx++
+
+		// Calculate the new timestamps with offset applied
+		newStart := currentDialogue.Start + offset
+		newEnd := currentDialogue.End + offset
+
+		// Rebuild the Dialogue line
+		// .ass dialogue lines format: Diallogue: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+		// Keep the text part whole so split into 10 substrings
+		parts := strings.SplitN(rawLine, ",", 10)
+		if len(parts) < 10 {
+			writer.WriteString(rawLine)
+			writer.WriteString("\n")
+			continue
+		}
+
+		// Update the start and end timestamps
+		parts[1] = FormatAssTimestamp(newStart)
+		parts[2] = FormatAssTimestamp(newEnd)
+
+		// Join the substrings and write to file
+		writer.Write([]byte(strings.Join(parts, ",") + "\n"))
 	}
+	// Make sure to flush the rest of the buffer if there is any left
+	return writer.Flush()
 }

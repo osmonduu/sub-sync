@@ -61,7 +61,7 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 	return samples, nil
 }
 
-// GetVoiceActivity takes the raw audio sampels and returns a []bool timeline.
+// GetVoiceActivity takes the raw audio samples and returns a []bool timeline.
 // sampleRate: 16000 (samples per second)
 // resolution: 100 ms
 func GetVoiceActivity(audioSamples []float64, sampleRate int, resolution time.Duration) []bool {
@@ -88,6 +88,7 @@ func GetVoiceActivity(audioSamples []float64, sampleRate int, resolution time.Du
 		meanSquared := sumOfSquares / float64(samplesPerSlot)
 		rms := math.Sqrt(meanSquared)
 
+		// Only set the slot to true when there is audio loud enough for subtitles to appear
 		if rms > threshold {
 			timeline[i] = true
 		}

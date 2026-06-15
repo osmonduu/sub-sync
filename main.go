@@ -1,86 +1,85 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
+	"strings"
+	"time"
 )
 
-// FindBestOffset compares the subtitle timeline against the reference audio timeline.
-// It slides the subtitle timeline across ar ange of offsets to find the best match.
-// maxOffsetSlots defines how far left or right we are willing to check (e.g. 4 slots = +-400 ms)
-func FindBestOffset(audioTimeline, subTimeline []bool, maxOffsetSlots int) (int, float64) {
-	bestOffset := 0
-	bestScore := -1.0 // Iniitalize with a low score so any real match beats it
+func main() {
+	// Define command-line flags to use SabotageAssFile
+	sabotageOffset := flag.Int("sabotage", 0,
+		"Specify an integer in seconds to intentionally sabotage (add offset to every subtitle) a .ass file")
+	flag.Parse()
 
-	// Slide the subtitle timeline from -maxOffsetSlots to +maxOffsetSlots
-	for offset := -maxOffsetSlots; offset <= maxOffsetSlots; offset++ {
-		score := calculateOverlapSocre(audioTimeline, subTimeline, offset)
-		fmt.Printf("Testing offset: %+d ms | Match score: %.2f%%\n", offset, score*100)
-
-		// If the offset yields a better match than previous attempts, save it
-		if score > bestScore {
-			bestScore = score
-			bestOffset = offset
-		}
+	// Grab the ramining non-flag arguments (the input and output paths)
+	args := flag.Args()
+	if len(args) < 2 {
+		fmt.Println("Usage: go run . [-sabotage seconds] <input_subtitles> <output_path>")
+		os.Exit(1)
 	}
-	return bestOffset, bestScore
+
+	// If user passed a sabotage flag, run that instead of the sync engine
+	if *sabotageOffset != 0 {
+		fmt.Printf("Sabotaging subtitles! Adding %ds latency ...\n", *sabotageOffset)
+		SabotageAssFile(args[0], args[1], *sabotageOffset)
+		return // Exit early so it doesn't try to run the sync engine
+	}
+
+	// Run normal sync logic
+	fmt.Println("Starting alignment sync engine...")
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: go run main.go <subtitles.ass> <video_file>")
+		return
+	}
+	subPath := os.Args[1]
+	videoPath := os.Args[2]
+
+	resolution := 100 * time.Millisecond
+	maxSearchDistance := 100 // Look 10 second forward/backward (100 slots * 100 ms)
+
+	// Parse subtitles and create the boolean subtitle timeline
+	fmt.Println("[1/4] Parsing subtitle file into memory...")
+	dialogueLines, rawLines, err := ParseAssFile(subPath)
+	if err != nil {
+		fmt.Printf("Error parsing ASS file: %v\n", err)
+		return
+	}
+	subTimeline := GenerateSubTimeline(dialogueLines, resolution)
+
+	// Extract audio and run the VAD (voice activity detection)
+	fmt.Println("[2/4] Decoding video audio and running VAD...")
+	audioSamples, err := ExtractAudio(videoPath)
+	if err != nil {
+		fmt.Printf("Error extracting audio: %v\n", err)
+		return
+	}
+	audioTimeline := GetVoiceActivity(audioSamples, 16000, resolution)
+
+	// Find the best match using sliding alignment
+	fmt.Println("[3/4] Calculating subtitle offset based on video audio...")
+	bestOffsetSlots, confidence := FindBestOffset(audioTimeline, subTimeline, maxSearchDistance)
+
+	// Convert slots back into milliseconds
+	finalOffsetTime := time.Duration(bestOffsetSlots) * resolution
+
+	fmt.Println("\n====================================")
+	fmt.Printf("ALIGNMENT MATCH COMPLETED:\n")
+	fmt.Printf("Calculated shift: %v (Slots: %+d)\n", finalOffsetTime, bestOffsetSlots)
+	fmt.Printf("Confidence score: %.2f%%\n", confidence*100)
+	fmt.Println("\n====================================")
+
+	// Apply offset and save to new file
+	outputPath := strings.TrimSuffix(subPath, ".ass") + "_synced.ass"
+	fmt.Printf("[4/4] Exporting modified subtitles to: %s\n", outputPath)
+
+	err = SaveSyncedAssFile(outputPath, rawLines, dialogueLines, finalOffsetTime)
+	if err != nil {
+		fmt.Printf("Output file error: %v\n", err)
+		return
+	}
+
+	fmt.Println("\nProcess complete! Subtitles successfully realigned.")
 }
-
-// calculateOverlapScore computes how well the timelines match at a specific offset.
-// The audio and sub files are split into 100 ms blocks represented by each index of their respective arrays.
-// An index holds true when the audio or sub is active in the respective file.
-func calculateOverlapSocre(audio, subs []bool, offset int) float64 {
-	matches := 0
-	totalSubSlots := 0
-
-	for subIdx, subIsActive := range subs {
-		if subIsActive {
-			totalSubSlots++
-
-			// Map the subtitle index to the corresponding audio index based on the current slide offset
-			audioIdx := subIdx + offset
-
-			// Ensure we aren't looking outside the boundaries of our audio track array
-			if audioIdx >= 0 && audioIdx < len(audio) {
-				// If both audio and subtitle are active at this point in time, it's a successful match
-				if audio[audioIdx] {
-					matches++
-				}
-			}
-		}
-	}
-	// Prevent division by zero if subtitle file has zero dialogue
-	if totalSubSlots == 0 {
-		return 0.0
-	}
-	// Return the percentage of subtitle slots that successfully matched to audio (0.0 to 1.0)
-	return float64(matches) / float64(totalSubSlots)
-}
-
-/* func main() {
-	// Assume 1 slot = 1 second
-	audioTimeline := []bool{
-		false, false, false, true, true, true, // 0 to 5 seconds
-		false, false, false, true, true, true, // 6 to 11 seconds
-		false, false, false, // 12 to 14 seconds
-	}
-	unsyncedSubTimeline := []bool{
-		false, true, true, true, false, false, // 0 to 5 seconds
-		false, true, true, true, false, false, // 6 to 11 seconds
-		false, false, false, // 12 to 14 seconds
-	}
-
-	// Search up to 4 seconds in either direction
-	maxSearchDistance := 4
-
-	fmt.Println("Starting timeline alignment simultion...")
-	fmt.Println("----------------------------------------")
-
-	//Execute the search
-	bestOffset, matchConfidence := FindBestOffset(audioTimeline, unsyncedSubTimeline, maxSearchDistance)
-
-	fmt.Println()
-	fmt.Println("----------------------------------------")
-	fmt.Println("ALGORITHM RESULT: ")
-	fmt.Printf("Subtitles shifted by: %+d slots.\n", bestOffset)
-	fmt.Printf("Match condience: %.2f%%\n", matchConfidence*100)
-} */
