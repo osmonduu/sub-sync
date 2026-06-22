@@ -1,4 +1,4 @@
-package main
+package subsync
 
 import (
 	"bufio"
@@ -31,7 +31,28 @@ func ParseTimestamp(timestamp string) (time.Duration, error) {
 	return totalDuration, nil
 }
 
-// CleanText removes bracketed environmental subtitles like [music playing] or (sighs).
+// FormatAssTimestamp converts a time.Duration into an .ass compliant "H:MM:SS.CS" (centiseconds) string.
+func FormatAssTimestamp(d time.Duration) string {
+	// If applying the offset didn't push the negative timestamp to a positive timestamp,
+	// clamp the 0 because .ass string format "H:MM:SS.cs" cannot represent negative time.
+	if d < 0 {
+		return "0:00:00.00"
+	}
+
+	totalSeconds := int(d.Seconds())
+	hours := totalSeconds / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	// Centiseconds are 1/100th of a second.
+	// Milliseconds / 10 is equivalent to a centisecond.
+	centiseconds := (d.Milliseconds() % 1000) / 10
+
+	return fmt.Sprintf("%d:%02d:%02d.%02d", hours, minutes, seconds, centiseconds)
+}
+
+// CleanText removes bracketed environmental subtitles like [music playing] or (sighs)
+// from a given Dialogue event in an .ass file.
 func CleanText(text string) string {
 	// Match anything inside brackets or parentheses with regex
 	re := regexp.MustCompile(`\[.*?\]|\(.*?\)`)
@@ -102,69 +123,7 @@ func ParseAssFile(filePath string) ([]DialogueLine, []string, error) {
 	return lines, rawLines, scanner.Err()
 }
 
-// GenerateSubTimeline converts the parsed subtitle lines into a []bool timeline,
-// where a 'true' value indicates the presence of dialogue.
-// resolution defines the duration of each slot (e.g. 100 ms)
-func GenerateSubTimeline(lines []DialogueLine, resolution time.Duration) []bool {
-	if len(lines) == 0 {
-		return []bool{}
-	}
-
-	// Find the last subtitle timestamp of the track to know how large our timeline should be
-	var maxDuration time.Duration
-	for _, line := range lines {
-		if line.End > maxDuration {
-			maxDuration = line.End
-		}
-	}
-
-	// Calculate number of slots required
-	totalSlots := int(maxDuration/resolution) + 1
-	timeline := make([]bool, totalSlots)
-
-	// Populate the timeline with the DialogueLines
-	for _, line := range lines {
-		// Skip environmental subtitles when building the timeline
-		if !line.IsDialogue {
-			continue
-		}
-
-		// Calculate the index which each timestamp should be in
-		startIdx := int(line.Start / resolution)
-		endIdx := int(line.End / resolution)
-
-		// Mark the time from the start to the end of the dialogue as true
-		for i := startIdx; i <= endIdx; i++ {
-			if i >= 0 && i < len(timeline) {
-				timeline[i] = true
-			}
-		}
-	}
-
-	return timeline
-}
-
-// FormatAssTimestamp converts a time.Duration into an .ass compliant "H:MM:SS.CS" (centiseconds) string.
-func FormatAssTimestamp(d time.Duration) string {
-	// If applying the offset didn't push the negative timestamp to a positive timestamp,
-	// clamp the 0 because .ass string format "H:MM:SS.cs" cannot represent negative time.
-	if d < 0 {
-		return "0:00:00.00"
-	}
-
-	totalSeconds := int(d.Seconds())
-	hours := totalSeconds / 3600
-	minutes := (totalSeconds % 3600) / 60
-	seconds := totalSeconds % 60
-
-	// Centiseconds are 1/100th of a second.
-	// Milliseconds / 10 is equivalent to a centisecond.
-	centiseconds := (d.Milliseconds() % 1000) / 10
-
-	return fmt.Sprintf("%d:%02d:%02d.%02d", hours, minutes, seconds, centiseconds)
-}
-
-// SaveSyncedAssFile writes the modified subtitles out to a new file.
+// SaveSyncedAssFile writes the modified subtitles, with offset applied, out to a new file.
 func SaveSyncedAssFile(outputPath string, rawLines []string, dialogueLines []DialogueLine, offset time.Duration) error {
 	file, err := os.Create(outputPath)
 	if err != nil {

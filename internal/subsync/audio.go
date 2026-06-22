@@ -1,12 +1,10 @@
-package main
+package subsync
 
 import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"os/exec"
-	"time"
 )
 
 // ExtractAudio uses ffmpeg to stream raw audio samples from a video.
@@ -59,40 +57,4 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 	}
 
 	return samples, nil
-}
-
-// GetVoiceActivity takes the raw audio samples and returns a []bool timeline.
-// sampleRate: 16000 (samples per second)
-// resolution: 100 ms
-func GetVoiceActivity(audioSamples []float64, sampleRate int, resolution time.Duration) []bool {
-	// Calculate how many samples fit into one slot (100 ms)
-	samplesPerSlot := int(float64(sampleRate) * resolution.Seconds())
-
-	numSlots := len(audioSamples) / samplesPerSlot
-	timeline := make([]bool, numSlots)
-
-	// Sensitivity threshold (volume gate)
-	threshold := 0.02
-
-	for i := 0; i < numSlots; i++ {
-		startIdx := i * samplesPerSlot
-		endIdx := startIdx + samplesPerSlot
-
-		// Calculate RMS for this block of measurements
-		var sumOfSquares float64
-		for _, freq := range audioSamples[startIdx:endIdx] {
-			// Normalize the value to make it easier to work with
-			normalized := freq / 32768.0
-			sumOfSquares += normalized * normalized
-		}
-		meanSquared := sumOfSquares / float64(samplesPerSlot)
-		rms := math.Sqrt(meanSquared)
-
-		// Only set the slot to true when there is audio loud enough for subtitles to appear
-		if rms > threshold {
-			timeline[i] = true
-		}
-	}
-
-	return timeline
 }
