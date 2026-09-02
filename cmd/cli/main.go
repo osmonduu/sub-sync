@@ -20,29 +20,28 @@ func main() {
 		os.Exit(1)
 	}
 
-
 	fmt.Println("Starting alignment engine...")
 
 	resolution := 100 * time.Millisecond
-	maxSearchDistance := 100 // Look 10 seconds forward/backward (100 slots * 100 ms)
-
-	// Parse subtitles and create the boolean subtitle timeline
-	fmt.Println("[1/4] Parsing subtitle file into memory...")
-	dialogueLines, rawLines, err := subsync.ParseAssFile(*subPath)
-	if err != nil {
-		fmt.Printf("Error parsing ASS file: %v\n", err)
-		return
-	}
-	subTimeline := subsync.GenerateSubTimeline(dialogueLines, resolution)
+	maxSearchDistance := 100 // Look 10 seconds forward/backward (100 slots * 100ms)
 
 	// Extract audio and run the VAD (voice activity detection)
-	fmt.Println("[2/4] Decoding video audio and running VAD...")
+	fmt.Println("[1/4] Decoding video audio and running VAD...")
 	audioSamples, err := subsync.ExtractAudio(*videoPath)
 	if err != nil {
 		fmt.Printf("Error extracting audio: %v\n", err)
 		return
 	}
 	audioTimeline := subsync.GenerateAudioTimeline(audioSamples, 16000, resolution)
+
+	// Parse subtitles and create the boolean subtitle timeline
+	fmt.Println("[2/4] Parsing subtitle file...")
+	dialogueLines, rawLines, err := subsync.ParseAssFile(*subPath)
+	if err != nil {
+		fmt.Printf("Error parsing ASS file: %v\n", err)
+		return
+	}
+	subTimeline := subsync.GenerateSubTimeline(dialogueLines, resolution)
 
 	// Find the best match using sliding alignment
 	fmt.Println("[3/4] Calculating subtitle offset based on video audio...")

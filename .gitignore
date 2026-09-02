@@ -4,3 +4,7 @@ sub-sync
 *.ass
 *.mp4
 *.vtt
+node_modules/
+gui/build/bin/
+gui/frontend/dist/
+gui/frontend/wailsjs/

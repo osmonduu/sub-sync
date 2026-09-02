@@ -8,14 +8,14 @@ import (
 // GenerateSubTimeline converts the parsed subtitle lines into a []bool timeline,
 // where a 'true' value indicates the presence of dialogue.
 // resolution defines the duration of each slot (e.g. 100 ms)
-func GenerateSubTimeline(lines []DialogueLine, resolution time.Duration) []bool {
-	if len(lines) == 0 {
+func GenerateSubTimeline(dialoguelines []DialogueLine, resolution time.Duration) []bool {
+	if len(dialoguelines) == 0 {
 		return []bool{}
 	}
 
 	// Find the last subtitle timestamp of the track to know how large our timeline should be
 	var maxDuration time.Duration
-	for _, line := range lines {
+	for _, line := range dialoguelines {
 		if line.End > maxDuration {
 			maxDuration = line.End
 		}
@@ -26,7 +26,7 @@ func GenerateSubTimeline(lines []DialogueLine, resolution time.Duration) []bool 
 	timeline := make([]bool, totalSlots)
 
 	// Populate the timeline with the DialogueLines
-	for _, line := range lines {
+	for _, line := range dialoguelines {
 		// Skip environmental subtitles when building the timeline
 		if !line.IsDialogue {
 			continue
