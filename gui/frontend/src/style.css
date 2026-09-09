@@ -1,15 +1,34 @@
+:root {
+    /* darkest, page background */
+    --color-bg: #24272b;
+    /* rows and panels - slighly lighter than bg */
+    --color-surface: #33373d;
+    /* panel headers - slightly lighter than surface */
+    --color-surface-2: #414449;
+    /* subtle border, low contrast against surface */
+    --color-border: #484d56;
+    /* primary text, near white */
+    --color-text: #dfe2e8;
+    /* secondary text, grey */
+    --color-text-muted: #8b8f96;
+    /* for buttons and success states */
+    --color-accent: #2a8a44;
+    /* red, for errors */
+    --color-danger: #e03131;
+}
+
 html {
-    background-color: rgba(27, 38, 54, 1);
-    text-align: center;
-    color: white;
+    background-color: var(--color-bg);
+    color: var(--color-text);
 }
 
 body {
     margin: 0;
-    color: white;
+    color: var(--color-text);
+    font-size: 13px;
     font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+        "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+        sans-serif;
 }
 
 @font-face {
@@ -17,10 +36,9 @@ body {
     font-style: normal;
     font-weight: 400;
     src: local(""),
-    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+        url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
 }
 
 #app {
     height: 100vh;
-    text-align: center;
 }
