@@ -11,10 +11,12 @@
     --color-text: #dfe2e8;
     /* secondary text, grey */
     --color-text-muted: #8b8f96;
-    /* for buttons and success states */
+    /* for sync button and success states */
     --color-accent: #2a8a44;
     /* red, for errors */
     --color-danger: #e03131;
+    /* log - darker than background */
+    --color-log: #1b1d21;
 }
 
 html {

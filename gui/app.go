@@ -95,21 +95,32 @@ func (a *App) RunSync(videoPath string, subPaths []string, outputFolder string) 
 
 	results := make([]SyncResult, 0, len(subPaths))
 
-	// Step 1: Extract audio from video file
+	runtime.EventsEmit(a.ctx, "sync:extracting-audio", true)
+	// Extract audio from video file
 	audioSamples, err := subsync.ExtractAudio(videoPath)
 	if err != nil {
 		// If audio extraction fails, the whole batch fails
+		runtime.EventsEmit(a.ctx, "sync:extracting-audio", false)
 		return marshalError(fmt.Sprintf("failed to extract audio from video source: %v", err))
 	}
 	audioTimeline := subsync.GenerateAudioTimeline(audioSamples, 16000, resolution)
+	runtime.EventsEmit(a.ctx, "sync:extracting-audio", false)
 
-	// Step 2: Process each subtitle file against the extracted audio
+	// Process each subtitle file against the extracted audio
 	for _, subPath := range subPaths {
 		result := processSingle(subPath, audioTimeline, resolution, maxSearchDistance, outputFolder)
 		results = append(results, result)
+
+		// For every synced subtitle file, send an event to frontend via Wails
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			fmt.Println("failed to serialize result: ", err.Error())
+			continue
+		}
+		runtime.EventsEmit(a.ctx, "sync:file-complete", string(resultJSON))
 	}
 
-	// Step 3: Return JSON array of results
+	// Return JSON array of results
 	out, err := json.Marshal(results)
 	if err != nil {
 		return marshalError("failed to serialize results")

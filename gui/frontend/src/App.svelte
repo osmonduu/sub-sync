@@ -7,13 +7,30 @@
     SelectVideo,
   } from "../wailsjs/go/main/App.js";
 
+  import { EventsOn } from "../wailsjs/runtime/runtime.js";
+  import { onMount } from "svelte";
+
   let videoPath = ""; // path to selected video
   let subPaths = []; // list of selected .ass file paths
   let outputFolder = ""; // optional custom output folder
   let results = []; // array of SyncResult from RunSync
   let running = false; // whether sync is currently running
   let progress = 0; // 0-100 for the progress bar
-  let finishedAt = ""; // temp variable to store time when the sync engine finishes
+  let finishedAt = ""; // variable to store time when the sync engine finishes
+  let extractingAudio = false; // event flag to indicate when the sync engine is extracting audio
+  let filesMissingError = ""; // error message shown to the user if they forget to add video or subtitle files
+
+  onMount(() => {
+    EventsOn("sync:extracting-audio", (isExtracting) => {
+      extractingAudio = isExtracting;
+    });
+
+    EventsOn("sync:file-complete", (resultJSON) => {
+      const result = JSON.parse(resultJSON);
+      result.completedAt = new Date().toLocaleTimeString("en-US");
+      results = [...results, result];
+    });
+  });
 
   // handleSelectVideo
   async function handleSelectVideo() {
@@ -41,17 +58,22 @@
 
   // handleRunSync
   async function handleRunSync() {
-    running = true;
-    results = []; // clear previous run output
     // Check if videoPath or subPath is populated before running the sync engine
-    if (videoPath === "" || subPaths.length === 0) {
-      running = false;
+    if (videoPath === "") {
+      filesMissingError = "Please add a video file before syncing.";
       return;
     }
+    if (subPaths.length === 0) {
+      filesMissingError =
+        "Please add at least one subtitle file before syncing.";
+      return;
+    }
+    filesMissingError = ""; // clear any previous error message before starting sync engine
+    results = []; // clear previous run output
+    running = true;
+
     try {
       const syncResults = await RunSync(videoPath, subPaths, outputFolder);
-      results = JSON.parse(syncResults);
-      finishedAt = new Date().toLocaleTimeString("en-US");
     } finally {
       running = false;
     }
@@ -64,7 +86,7 @@
     outputFolder = "";
     results = [];
     progress = 0;
-    finishedAt = "";
+    extractingAudio = false;
   }
 </script>
 
@@ -133,7 +155,7 @@
             <i class="ti ti-file-text"></i>
             <span class="file-name">{path.split("/").pop()}</span>
             {#if result === undefined}
-              <span>waiting...</span>
+              <span class="waiting">waiting...</span>
             {:else if result.error !== ""}
               <span class="log-error">error syncing</span>
             {:else}
@@ -148,10 +170,18 @@
   </div>
 
   <div class="progress-bar">
-    {#if running}
-      <p>Syncing...</p>
-    {:else if results.length > 0}
+    {#if extractingAudio}
+      <p>Extracting audio from video source...</p>
+    {:else if running || results.length > 0}
       <p>{results.length} / {subPaths.length} complete</p>
+      <!-- outer rectangle (static, representing 100%) -->
+      <div class="progress-track">
+        <!-- inner rectangle (dynamic, representing current progress) -->
+        <div
+          class="progress-fill"
+          style="width: {(results.length / subPaths.length) * 100}%"
+        ></div>
+      </div>
     {:else}
       <p>Ready</p>
     {/if}
@@ -160,7 +190,7 @@
   <div class="log">
     {#each results as result}
       <div class="log-line">
-        <span class="log-time">{finishedAt}</span>
+        <span class="log-time">{result.completedAt}</span>
         <span>{result.inputPath.split("/").pop()}</span>
         <span class={result.error === "" ? "log-success" : "log-error"}>
           {result.error === ""
@@ -175,6 +205,9 @@
     <button class="btn-cancel" on:click={handleClear}>Clear</button>
     <button class="btn-sync" on:click={handleRunSync}>Sync all</button>
   </div>
+  {#if filesMissingError}
+    <p class="validation-error">{filesMissingError}</p>
+  {/if}
 </div>
 
 <!-- CSS -->
@@ -302,13 +335,33 @@
     color: var(--color-text-muted);
   }
 
+  .waiting {
+    color: var(--color-text-muted);
+  }
+
   .progress-bar {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    gap: 8px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 6px;
     padding: 8px 14px;
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 6px;
+    background: var(--color-bg);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--color-accent);
+    border-radius: 99px;
+    transition: width 0.3s ease;
   }
 
   .log {
@@ -316,7 +369,8 @@
     justify-content: flex-start;
     flex-direction: column;
     gap: 6px;
-    background: var(--color-surface);
+    min-height: 80px;
+    background: var(--color-log);
     border: 1px solid var(--color-border);
     border-radius: 6px;
     padding: 10px 12px;
@@ -359,5 +413,11 @@
     border: none;
     border-radius: 6px;
     padding: 6px 10px;
+  }
+
+  .validation-error {
+    color: var(--color-danger);
+    font-size: 16px;
+    text-align: right;
   }
 </style>
