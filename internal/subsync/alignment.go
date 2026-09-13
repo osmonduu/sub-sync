@@ -8,12 +8,12 @@ import "fmt"
 // maxOffsetSlots defines how far left or right we are willing to check (e.g. 4 slots = +-400 ms)
 func FindBestOffset(audioTimeline, subTimeline []bool, maxOffsetSlots int) (bestOffset int, bestMatchConfidence float64) {
 	bestOffset = 0
-	bestMatchConfidence = -1.0 // Iniitalize with a low score so any real match beats it
+	bestMatchConfidence = -1.0 // Iniitalize with an impossible negative score so any real match beats it
 
 	// Slide the subtitle timeline from -maxOffsetSlots to +maxOffsetSlots
 	for offset := -maxOffsetSlots; offset <= maxOffsetSlots; offset++ {
 		score := calculateOverlapScore(audioTimeline, subTimeline, offset)
-		fmt.Printf("Testing offset: %+d ms | Match score: %.2f\n", offset, score)
+		fmt.Printf("Testing offset: %+d ms | Match score: %.2f\n", offset*100, score)
 
 		// If the offset yields a better match than previous attempts, save it
 		if score > bestMatchConfidence {
@@ -28,8 +28,8 @@ func FindBestOffset(audioTimeline, subTimeline []bool, maxOffsetSlots int) (best
 // The audio and sub files are split into 100 ms blocks represented by each index of their respective arrays.
 // An index holds true when the audio or sub is active in the respective file.
 func calculateOverlapScore(audio, subs []bool, offset int) float64 {
-	matches := 0
-	totalSubSlots := 0
+	totalSubSlots := 0	// tracks the total number of indices that have subtitles
+	matches := 0	// tracks the number of 'true' subtitle index and 'true' audio index matches
 
 	for subIdx, subIsActive := range subs {
 		if subIsActive {
