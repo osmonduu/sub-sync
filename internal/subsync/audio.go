@@ -7,8 +7,8 @@ import (
 	"os/exec"
 )
 
-// ExtractAudio uses ffmpeg to stream raw audio samples from a video.
-// Returns a slice of float64 values representing the audio's intensity over time.
+// ExtractAudio uses ffmpeg to stream raw audio samples from a video into
+// a slice of float64 values representing the audio's intensity over time.
 // Each float64 value represents a measurement and 16,000 of them represent a second of audio.
 func ExtractAudio(videoPath string) ([]float64, error) {
 	// FFmpeg command:
@@ -31,24 +31,24 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 	}
 
 	var samples []float64
-
-	// Read each audio sample (16-bits/2 bytes)
-	buffer := make([]byte, 2)
+	const chunkSize = 64 *1024	// read 64KB at a time
+	buffer := make([]byte, chunkSize)
 	for {
-		_, err := io.ReadFull(stdout, buffer)
+		n, err := stdout.Read(buffer)
+		if n > 0 {
+			// Process every 2 bytes in the chunk
+			for i := 0; i+1 < n; i += 2 {
+				rawSample := binary.LittleEndian.Uint16(buffer[i : i+2])
+				sample := int16(rawSample)
+				samples = append(samples, float64(sample))
+			}
+		}
 		if err == io.EOF {
-			break // finished processing
+			break
 		}
 		if err != nil {
 			return nil, fmt.Errorf("Error reading audio stream: %v", err)
 		}
-
-		// Read the 2 bytes as an unsigned 16-bit little endian int first
-		rawSample := binary.LittleEndian.Uint16(buffer)
-
-		// Convert back to a signed 16-bit integer then cast to float64 decimal
-		sample := int16(rawSample)
-		samples = append(samples, float64(sample))
 	}
 
 	// Wait for the process to clean up
