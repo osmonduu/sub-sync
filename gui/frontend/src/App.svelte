@@ -10,15 +10,33 @@
   import { EventsOn } from "../wailsjs/runtime/runtime.js";
   import { onMount } from "svelte";
 
+  // User inputs and output
   let videoPath = ""; // path to selected video
   let subPaths = []; // list of selected .ass file paths
   let outputFolder = ""; // optional custom output folder
-  let results = []; // array of SyncResult from RunSync
+  let results = []; // array of SyncResult generated from RunSync
+
+  // Segment duration and search range defaults
+  const searchMin = 500,
+    searchMax = 10000,
+    searchStep = 500,
+    searchDefault = 3000;
+  const searchTicks = buildTicks(searchMin, searchMax, searchStep);
+  const segmentMin = 1,
+    segmentMax = 15,
+    segmentStep = 1,
+    segmentDefault = 5;
+  const segmentTicks = buildTicks(segmentMin, segmentMax, segmentStep);
+  let maxSearchDistanceMs = searchDefault; // negative/positive range of offset values the engine will try
+  let segmentDurationMinutes = segmentDefault; // length of a segment
+
+  // States
   let running = false; // whether sync is currently running
   let progress = 0; // 0-100 for the progress bar
   let finishedAt = ""; // variable to store time when the sync engine finishes
   let extractingAudio = false; // event flag to indicate when the sync engine is extracting audio
   let filesMissingError = ""; // error message shown to the user if they forget to add video or subtitle files
+  let advancedOpen = false;
 
   onMount(() => {
     EventsOn("sync:extracting-audio", (isExtracting) => {
@@ -73,7 +91,13 @@
     running = true;
 
     try {
-      const syncResults = await RunSync(videoPath, subPaths, outputFolder);
+      const syncResults = await RunSync(
+        videoPath,
+        subPaths,
+        outputFolder,
+        maxSearchDistanceMs,
+        segmentDurationMinutes,
+      );
     } finally {
       running = false;
     }
@@ -85,8 +109,28 @@
     subPaths = [];
     outputFolder = "";
     results = [];
+    maxSearchDistanceMs = searchDefault;
+    segmentDurationMinutes = segmentDefault;
     progress = 0;
     extractingAudio = false;
+  }
+
+  // formatOffsetRange
+  function formatOffsetRange(minOffset, maxOffset) {
+    const sign = (ms) => (ms > 0 ? "+" : "");
+    if (minOffset === maxOffset) {
+      return `${sign(minOffset)}${minOffset}ms`;
+    }
+    return `${sign(minOffset)}${minOffset}ms to ${sign(maxOffset)}${maxOffset}ms`;
+  }
+
+  // buildTicks builds an array of tick values starting from min and ending at max.
+  function buildTicks(min, max, step) {
+    const ticks = [];
+    for (let v = min; v <= max; v += step) {
+      ticks.push(v);
+    }
+    return ticks;
   }
 </script>
 
@@ -160,11 +204,79 @@
               <span class="log-error">error syncing</span>
             {:else}
               <span class="log-success">
-                {result.offsetMs > 0 ? "+" : ""}{result.offsetMs}ms
+                {formatOffsetRange(result.minOffset, result.maxOffset)}
               </span>
             {/if}
           </div>
         {/each}
+      </div>
+    </div>
+  </div>
+
+  <div class="sliders">
+    <div class="slider-group">
+      <p class="slider-header">
+        Segment Length: {segmentDurationMinutes} min
+        <span class="tooltip">
+          Shorter segment lengths track drift more closely but have fewer
+          subtitle lines which may tank the confidence score below the threshold
+          and get filtered instead. Longer segments have more reliable
+          confidence scores but average more of the file. Default: 5 min.
+        </span>
+      </p>
+      <div class="slider-track">
+        <div class="tick-row">
+          {#each segmentTicks as tickValue}
+            {@const pct = ((tickValue - segmentMin) / (segmentMax - segmentMin)) * 100}
+            <div
+              class="tick {tickValue == segmentDefault ? 'tick-default' : ''}"
+              // calculate the percentage of the slider track to place the tick and 
+              // then add the offset to center it with the slider thumb
+              style="left: calc({pct}% + (15.38464px * ((100 - {pct}) / 100) - 15.38464px / 2))"
+            ></div>
+          {/each}
+        </div>
+        <input
+        type="range"
+        min={segmentMin}
+        max={segmentMax}
+        step={segmentStep}
+        bind:value={segmentDurationMinutes}
+        title="{segmentDurationMinutes} min"
+        />
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <p class="slider-header">
+        Search Range: ±{maxSearchDistanceMs}ms
+        <span class="tooltip">
+          A narrower search range won't be able to catch true offsets larger than the
+          range itself. A wider range gives false matches of subtitle to
+          dialogue, making the offset much larger than the true offset. Default:
+          ±3000ms.
+        </span>
+      </p>
+      <div class="slider-track">
+        <div class="tick-row">
+          {#each searchTicks as tickValue}
+            {@const pct = ((tickValue - searchMin) / (searchMax - searchMin)) * 100}
+            <div
+              class="tick {tickValue == searchDefault ? 'tick-default' : ''}"
+              // calculate the percentage of the slider track to place the tick and 
+              // then add offset to center it with the slider thumb
+              style="left: calc({pct}% + (15.38464px * ((100 - {pct}) / 100) - 15.38464px / 2))"
+            ></div>
+          {/each}
+        </div>
+        <input
+          type="range"
+          min={searchMin}
+          max={searchMax}
+          step={searchStep}
+          bind:value={maxSearchDistanceMs}
+          title="±{maxSearchDistanceMs}ms"
+        />
       </div>
     </div>
   </div>
@@ -194,7 +306,8 @@
         <span>{result.inputPath.split("/").pop()}</span>
         <span class={result.error === "" ? "log-success" : "log-error"}>
           {result.error === ""
-            ? result.offsetMs + "ms offset applied"
+            ? formatOffsetRange(result.minOffset, result.maxOffset) +
+              " offset applied"
             : result.error}
         </span>
       </div>
@@ -337,6 +450,82 @@
 
   .waiting {
     color: var(--color-text-muted);
+  }
+
+  .sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .slider-header {
+    position: relative;
+    cursor: help;
+    width: fit-content;
+  }
+
+  .tooltip {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    bottom: 125%;
+    left: 0;
+    width: 240px;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--color-text);
+    z-index: 10;
+    transition: opacity 0.15s ease;
+  }
+
+  .slider-header:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .slider-track {
+    max-width: 70%;
+  }
+
+  .slider-track input {
+    width: 100%;
+    margin: 0;
+  }
+
+  /* not actually working for some reason */
+  .slider-track input::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .tick-row {
+    position: relative;
+    height: 10px;
+    margin-bottom: 6px;
+  }
+
+  .tick {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 4px;
+    background: var(--color-text-muted);
+  }
+  
+  .tick-default {
+    top: 50%;
+    transform: translateY(-50%);
+    height: 10px;
   }
 
   .progress-bar {

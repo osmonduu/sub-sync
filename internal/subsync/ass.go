@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// ParseTimestamp convers an ASSA time string "H:M:S.C" (centiseconds) into a Go time.Duration.
+// ParseTimestamp converts an ASSA Events (Dialogue line) timestamp "H:M:S.CS" (centiseconds) into a time.Duration.
 func ParseTimestamp(timestamp string) (time.Duration, error) {
 	var hours, minutes, seconds int
 	var centiseconds int
@@ -33,8 +33,8 @@ func ParseTimestamp(timestamp string) (time.Duration, error) {
 
 // FormatAssTimestamp converts a time.Duration into an .ass compliant "H:MM:SS.CS" (centiseconds) string.
 func FormatAssTimestamp(d time.Duration) string {
-	// If applying the offset didn't push the negative timestamp to a positive timestamp,
-	// clamp the 0 because .ass string format "H:MM:SS.cs" cannot represent negative time.
+	// If applying the offset didn't push a negative timestamp to a positive timestamp,
+	// clamp to 0 because .ass string format "H:MM:SS.cs" cannot represent negative time.
 	if d < 0 {
 		return "0:00:00.00"
 	}
@@ -123,8 +123,8 @@ func ParseAssFile(filePath string) ([]DialogueLine, []string, error) {
 	return lines, rawLines, scanner.Err()
 }
 
-// SaveSyncedAssFile writes the modified subtitles, with offset applied, out to a new file.
-func SaveSyncedAssFile(outputPath string, rawLines []string, dialogueLines []DialogueLine, offset time.Duration) error {
+// SaveSyncedAssFile writes the modified subtitles, with each line's unique offset applied, out to a new file.
+func SaveSyncedAssFile(outputPath string, rawLines []string, alignedLines []AlignedLine) error {
 	file, err := os.Create(outputPath)
 	if err != nil {
 		return err
@@ -136,17 +136,17 @@ func SaveSyncedAssFile(outputPath string, rawLines []string, dialogueLines []Dia
 
 	for _, rawLine := range rawLines {
 		// If it isn't a Dialogue line, write the original raw text back out.
-		if !strings.HasPrefix(rawLine, "Dialogue:") || dialogueIdx >= len(dialogueLines) {
+		if !strings.HasPrefix(rawLine, "Dialogue:") || dialogueIdx >= len(alignedLines) {
 			writer.WriteString(rawLine)
 			writer.WriteString("\n")
 			continue
 		}
-		currentDialogue := dialogueLines[dialogueIdx]
+		currentAligned := alignedLines[dialogueIdx]
 		dialogueIdx++
 
-		// Calculate the new timestamps with offset applied
-		newStart := currentDialogue.Start + offset
-		newEnd := currentDialogue.End + offset
+		// Calculate the new timestamps with this line's own interpolated offset applied
+		newStart := currentAligned.Dialogue.Start + currentAligned.Offset
+		newEnd := currentAligned.Dialogue.End + currentAligned.Offset
 
 		// Rebuild the Dialogue line
 		// .ass dialogue lines format: Diallogue: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

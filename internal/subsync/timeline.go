@@ -32,7 +32,7 @@ func GenerateSubTimeline(dialoguelines []DialogueLine, resolution time.Duration)
 			continue
 		}
 
-		// Calculate the index which each timestamp should be in
+		// Calculate the range of indices this subtitle populates
 		startIdx := int(line.Start / resolution)
 		endIdx := int(line.End / resolution)
 

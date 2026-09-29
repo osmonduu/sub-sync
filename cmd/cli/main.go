@@ -11,8 +11,21 @@ import (
 )
 
 func main() {
+	// Define and set the variables that are passed in by the user
 	subPath := flag.String("sub", "", "Path to input. ass subtitle file")
 	videoPath := flag.String("video", "", "Path to input video file")
+	maxSearchDistanceMs := flag.Int(
+		"search", 
+		3000, 
+		"The range, in milliseconds, that the engine searches to find the best offset (default: 3000 ms). " + 
+		"Larger values will result in more inaccurate results.",
+	)
+	segmentDuration := flag.Int(
+		"segment",
+		5,
+		"Length of a segment in minutes (default: 5 min). The audio is broken up into segments to find each segment's best offset. " +
+		"Smaller values will result in more inaccurate offsets.",
+	)
 	flag.Parse()
 
 	if *subPath == "" || *videoPath == "" {
@@ -23,7 +36,8 @@ func main() {
 	fmt.Println("Starting alignment engine...")
 
 	resolution := 100 * time.Millisecond
-	maxSearchDistance := 100 // Look 10 seconds forward/backward (100 slots * 100ms)
+	maxSearchDistanceSlots := *maxSearchDistanceMs / 100 // search area in terms of slots (3000 / 100ms = 30 slots)
+	segmentDurationMinutes := time.Duration(*segmentDuration) * time.Minute
 
 	// Extract audio and run the VAD (voice activity detection)
 	fmt.Println("[1/4] Decoding video audio and running VAD...")
@@ -41,26 +55,31 @@ func main() {
 		fmt.Printf("Error parsing ASS file: %v\n", err)
 		return
 	}
-	subTimeline := subsync.GenerateSubTimeline(dialogueLines, resolution)
 
-	// Find the best match using sliding alignment
+	// Find the best offset using sliding alignment and interpolation
 	fmt.Println("[3/4] Calculating subtitle offset based on video audio...")
-	bestOffsetSlots, confidence := subsync.FindBestOffset(audioTimeline, subTimeline, maxSearchDistance)
-
-	// Convert slots back into milliseconds
-	finalOffsetTime := time.Duration(bestOffsetSlots) * resolution
+	alignedLines, minOffset, maxOffset := subsync.AlignPiecewise(
+		dialogueLines, 
+		audioTimeline, 
+		resolution, 
+		maxSearchDistanceSlots,
+		segmentDurationMinutes,
+	)
 
 	fmt.Println("\n====================================")
 	fmt.Printf("ALIGNMENT MATCH COMPLETED:\n")
-	fmt.Printf("Calculated shift: %v (Slots: %+d)\n", finalOffsetTime, bestOffsetSlots)
-	fmt.Printf("Confidence score: %.2f%%\n", confidence*100)
+	if minOffset == maxOffset {
+		fmt.Printf("Calculated offset: %d ms", minOffset.Milliseconds())
+	} else {
+		fmt.Printf("Calculated offset range: %d ms to %d ms", minOffset.Milliseconds(), maxOffset.Milliseconds())
+	}
 	fmt.Println("\n====================================")
 
 	// Apply offset and save to new file
 	outputPath := strings.TrimSuffix(*subPath, ".ass") + "_synced.ass"
 	fmt.Printf("[4/4] Exporting modified subtitles to: %s\n", outputPath)
 
-	err = subsync.SaveSyncedAssFile(outputPath, rawLines, dialogueLines, finalOffsetTime)
+	err = subsync.SaveSyncedAssFile(outputPath, rawLines, alignedLines)
 	if err != nil {
 		fmt.Printf("Output file error: %v\n", err)
 		return

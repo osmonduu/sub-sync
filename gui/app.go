@@ -36,7 +36,8 @@ func (a *App) startup(ctx context.Context) {
 type SyncResult struct {
 	InputPath  string `json:"inputPath"`
 	OutputPath string `json:"outputPath"`
-	OffsetMs   int64  `json:"offsetMs"`
+	MinOffset  int64  `json:"minOffset"`
+	MaxOffset  int64  `json:"maxOffset"`
 	Error      string `json:"error"` // empty string means success
 }
 
@@ -89,9 +90,14 @@ func (a *App) SelectOutputFolder() string {
 //
 // outputFolder is optional. If empty, each synced file goes into a "synced subtitles"
 // subfolder next to its input file
-func (a *App) RunSync(videoPath string, subPaths []string, outputFolder string) string {
+func (a *App) RunSync(
+	videoPath string,
+	subPaths []string,
+	outputFolder string,
+	maxSearchDistanceMs int,
+	segmentDurationMinutes int,
+) string {
 	resolution := 100 * time.Millisecond
-	maxSearchDistance := 100 // 100 slots * 100ms = ±10 seconds search window
 
 	results := make([]SyncResult, 0, len(subPaths))
 
@@ -107,8 +113,10 @@ func (a *App) RunSync(videoPath string, subPaths []string, outputFolder string) 
 	runtime.EventsEmit(a.ctx, "sync:extracting-audio", false)
 
 	// Process each subtitle file against the extracted audio
+	maxSearchDistanceSlots := maxSearchDistanceMs / 100 	// convert from milliseconds to number of 100 ms slots
+	segmentDuration := time.Duration(segmentDurationMinutes) * time.Minute
 	for _, subPath := range subPaths {
-		result := processSingle(subPath, audioTimeline, resolution, maxSearchDistance, outputFolder)
+		result := processSingle(subPath, outputFolder, audioTimeline, resolution, maxSearchDistanceSlots, segmentDuration)
 		results = append(results, result)
 
 		// For every synced subtitle file, send an event to frontend via Wails
@@ -128,8 +136,15 @@ func (a *App) RunSync(videoPath string, subPaths []string, outputFolder string) 
 	return string(out)
 }
 
-// processSingle handles one subtitle file parsing, aligning, and saving to new .ass file
-func processSingle(subPath string, audioTimeline []bool, resolution time.Duration, maxSearchDistance int, outputFolder string) SyncResult {
+// processSingle handles one subtitle file's parsing, aligning, and saving to new .ass file
+func processSingle(
+	subPath string, 
+	outputFolder string,
+	audioTimeline []bool, 
+	resolution time.Duration, 
+	maxSearchDistanceSlots int, 
+	segmentDuration time.Duration,
+	) SyncResult {
 	// Parse the subtitle file
 	dialogueLines, rawLines, err := subsync.ParseAssFile(subPath)
 	if err != nil {
@@ -138,18 +153,22 @@ func processSingle(subPath string, audioTimeline []bool, resolution time.Duratio
 			Error:     err.Error(),
 		}
 	}
-	subTimeline := subsync.GenerateSubTimeline(dialogueLines, resolution)
 
-	// Find best offset
-	bestOffsetSlots, _ := subsync.FindBestOffset(audioTimeline, subTimeline, maxSearchDistance)
-	finalOffset := time.Duration(bestOffsetSlots) * resolution
+	// Find the best offset for each dialogue line
+	alignedLines, minOffset, maxOffset := subsync.AlignPiecewise(
+		dialogueLines, 
+		audioTimeline, 
+		resolution, 
+		maxSearchDistanceSlots,
+		segmentDuration,
+	)
 
 	// Determine the output path and save the synced file
 	outputPath, err := resolveOutputPath(subPath, outputFolder)
 	if err != nil {
 		return SyncResult{InputPath: subPath, Error: err.Error()}
 	}
-	err = subsync.SaveSyncedAssFile(outputPath, rawLines, dialogueLines, finalOffset)
+	err = subsync.SaveSyncedAssFile(outputPath, rawLines, alignedLines)
 	if err != nil {
 		return SyncResult{InputPath: subPath, Error: err.Error()}
 	}
@@ -157,7 +176,8 @@ func processSingle(subPath string, audioTimeline []bool, resolution time.Duratio
 	return SyncResult{
 		InputPath:  subPath,
 		OutputPath: outputPath,
-		OffsetMs:   finalOffset.Milliseconds(),
+		MinOffset:  minOffset.Milliseconds(),
+		MaxOffset:  maxOffset.Milliseconds(),
 	}
 }
 
