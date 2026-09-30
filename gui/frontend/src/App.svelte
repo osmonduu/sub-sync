@@ -36,7 +36,7 @@
   let finishedAt = ""; // variable to store time when the sync engine finishes
   let extractingAudio = false; // event flag to indicate when the sync engine is extracting audio
   let filesMissingError = ""; // error message shown to the user if they forget to add video or subtitle files
-  let advancedOpen = false;
+  let advancedOpen = false; // state of the collapsable advanced segment and search sliders
 
   onMount(() => {
     EventsOn("sync:extracting-audio", (isExtracting) => {
@@ -103,16 +103,20 @@
     }
   }
 
-  // handleClear
+  // handleClear clears the previous run's input and output.
   function handleClear() {
     videoPath = "";
     subPaths = [];
     outputFolder = "";
     results = [];
-    maxSearchDistanceMs = searchDefault;
-    segmentDurationMinutes = segmentDefault;
     progress = 0;
     extractingAudio = false;
+  }
+
+  // handleResetAdvanced resets the segment and search sliders back to default values.
+  function handleResetAdvanced() {
+    maxSearchDistanceMs = searchDefault;
+    segmentDurationMinutes = segmentDefault;
   }
 
   // formatOffsetRange
@@ -124,13 +128,19 @@
     return `${sign(minOffset)}${minOffset}ms to ${sign(maxOffset)}${maxOffset}ms`;
   }
 
-  // buildTicks builds an array of tick values starting from min and ending at max.
+  // buildTicks populate an array with tick values, step value apart, starting from min and
+  // ending at max.
   function buildTicks(min, max, step) {
     const ticks = [];
     for (let v = min; v <= max; v += step) {
       ticks.push(v);
     }
     return ticks;
+  }
+
+  // toggleAdvanced toggles the advancedOpen between true and false.
+  function toggleAdvanced() {
+    advancedOpen = !advancedOpen;
   }
 </script>
 
@@ -141,7 +151,7 @@
     {#if videoPath !== ""}
       <span class="path-value">{videoPath}</span>
     {:else}
-      <span class="path-value path-value-muted">No file selected</span>
+      <span class="path-value">No file selected</span>
     {/if}
     <button class="btn-small" on:click={handleSelectVideo}>Browse</button>
   </div>
@@ -151,7 +161,7 @@
     {#if outputFolder !== ""}
       <span class="path-value">{outputFolder}</span>
     {:else}
-      <span class="path-value path-value-muted"
+      <span class="path-value"
         >Default - synced_subtitles/ next to each input file</span
       >
     {/if}
@@ -213,90 +223,109 @@
     </div>
   </div>
 
-  <div class="sliders">
-    <div class="slider-group">
-      <p class="slider-header">
-        Segment Length: {segmentDurationMinutes} min
-        <span class="tooltip">
-          Shorter segment lengths track drift more closely but have fewer
-          subtitle lines which may tank the confidence score below the threshold
-          and get filtered instead. Longer segments have more reliable
-          confidence scores but average more of the file. Default: 5 min.
-        </span>
-      </p>
-      <div class="slider-track">
-        <div class="tick-row">
-          {#each segmentTicks as tickValue}
-            {@const pct = ((tickValue - segmentMin) / (segmentMax - segmentMin)) * 100}
-            <div
-              class="tick {tickValue == segmentDefault ? 'tick-default' : ''}"
-              // calculate the percentage of the slider track to place the tick and 
-              // then add the offset to center it with the slider thumb
-              style="left: calc({pct}% + (15.38464px * ((100 - {pct}) / 100) - 15.38464px / 2))"
-            ></div>
-          {/each}
+  <button class="advanced-header" on:click={toggleAdvanced}>
+    <i class="ti ti-chevron-down {advancedOpen ? 'chevron-open' : ''}"></i>
+    <p>Advanced options</p>
+  </button>
+  {#if advancedOpen}
+    <div class="advanced-panel">
+      <div class="sliders">
+        <div class="slider-group">
+          <p class="slider-header">
+            Segment Length: {segmentDurationMinutes} min
+            <span class="tooltip">
+              Shorter segment lengths track drift more closely but have fewer
+              subtitle lines which may tank the confidence score below the
+              threshold and get filtered instead. Longer segments have more
+              reliable confidence scores but average more of the file. Default:
+              5 min.
+            </span>
+          </p>
+          <div class="slider-track">
+            <div class="tick-row">
+              {#each segmentTicks as tickValue}
+                {@const pct =
+                  ((tickValue - segmentMin) / (segmentMax - segmentMin)) * 100}
+                <div
+                  class="tick {tickValue == segmentDefault
+                    ? 'tick-default'
+                    : ''}"
+                  // calculate the percentage of the slider track to place the tick and
+                  // then add the offset to center it with the slider thumb
+                  style="left: calc({pct}% + (15.38464px * ((100 - {pct}) / 100) - 15.38464px / 2))"
+                ></div>
+              {/each}
+            </div>
+            <input
+              type="range"
+              min={segmentMin}
+              max={segmentMax}
+              step={segmentStep}
+              bind:value={segmentDurationMinutes}
+              title="{segmentDurationMinutes} min"
+            />
+          </div>
         </div>
-        <input
-        type="range"
-        min={segmentMin}
-        max={segmentMax}
-        step={segmentStep}
-        bind:value={segmentDurationMinutes}
-        title="{segmentDurationMinutes} min"
-        />
-      </div>
-    </div>
 
-    <div class="slider-group">
-      <p class="slider-header">
-        Search Range: ±{maxSearchDistanceMs}ms
-        <span class="tooltip">
-          A narrower search range won't be able to catch true offsets larger than the
-          range itself. A wider range gives false matches of subtitle to
-          dialogue, making the offset much larger than the true offset. Default:
-          ±3000ms.
-        </span>
-      </p>
-      <div class="slider-track">
-        <div class="tick-row">
-          {#each searchTicks as tickValue}
-            {@const pct = ((tickValue - searchMin) / (searchMax - searchMin)) * 100}
-            <div
-              class="tick {tickValue == searchDefault ? 'tick-default' : ''}"
-              // calculate the percentage of the slider track to place the tick and 
-              // then add offset to center it with the slider thumb
-              style="left: calc({pct}% + (15.38464px * ((100 - {pct}) / 100) - 15.38464px / 2))"
-            ></div>
-          {/each}
+        <div class="slider-group">
+          <p class="slider-header">
+            Search Range: ±{maxSearchDistanceMs}ms
+            <span class="tooltip">
+              A narrower search range won't be able to catch true offsets larger
+              than the range itself. A wider range gives false matches of
+              subtitle to dialogue, making the offset much larger than the true
+              offset. Default: ±3000ms.
+            </span>
+          </p>
+          <div class="slider-track">
+            <div class="tick-row">
+              {#each searchTicks as tickValue}
+                {@const pct =
+                  ((tickValue - searchMin) / (searchMax - searchMin)) * 100}
+                <div
+                  class="tick {tickValue == searchDefault
+                    ? 'tick-default'
+                    : ''}"
+                  // calculate the percentage of the slider track to place the tick and
+                  // then add offset to center it with the slider thumb
+                  style="left: calc({pct}% + (15.38464px * ((100 - {pct}) / 100) - 15.38464px / 2))"
+                ></div>
+              {/each}
+            </div>
+            <input
+              type="range"
+              min={searchMin}
+              max={searchMax}
+              step={searchStep}
+              bind:value={maxSearchDistanceMs}
+              title="±{maxSearchDistanceMs}ms"
+            />
+          </div>
         </div>
-        <input
-          type="range"
-          min={searchMin}
-          max={searchMax}
-          step={searchStep}
-          bind:value={maxSearchDistanceMs}
-          title="±{maxSearchDistanceMs}ms"
-        />
+      <button class="btn-small reset-btn" on:click={handleResetAdvanced}
+        >Reset</button>
       </div>
     </div>
-  </div>
+  {/if}
 
   <div class="progress-bar">
     {#if extractingAudio}
       <p>Extracting audio from video source...</p>
     {:else if running || results.length > 0}
       <p>{results.length} / {subPaths.length} complete</p>
-      <!-- outer rectangle (static, representing 100%) -->
-      <div class="progress-track">
-        <!-- inner rectangle (dynamic, representing current progress) -->
-        <div
-          class="progress-fill"
-          style="width: {(results.length / subPaths.length) * 100}%"
-        ></div>
-      </div>
     {:else}
       <p>Ready</p>
     {/if}
+    <!-- outer rectangle (static, representing 100%) -->
+    <div class="progress-track">
+      <!-- inner rectangle (dynamic, representing current progress) -->
+      <div
+        class="progress-fill"
+        style="width: {running || results.length > 0
+          ? (results.length / subPaths.length) * 100
+          : 0}%"
+      ></div>
+    </div>
   </div>
 
   <div class="log">
@@ -352,9 +381,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .path-value-muted {
     color: var(--color-text-muted);
   }
 
@@ -452,10 +478,44 @@
     color: var(--color-text-muted);
   }
 
+  .advanced-header {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .advanced-header i {
+    transition: transform 0.15s ease;
+  }
+
+  .chevron-open {
+    transform: rotate(180deg);
+  }
+
+  .advanced-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-left: 20px;
+    margin-right: 25%;
+    margin-bottom: 8px;
+  }
+
   .sliders {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 10px;
   }
 
   .slider-group {
@@ -492,21 +552,6 @@
     opacity: 1;
   }
 
-  .slider-track {
-    max-width: 70%;
-  }
-
-  .slider-track input {
-    width: 100%;
-    margin: 0;
-  }
-
-  /* not actually working for some reason */
-  .slider-track input::-webkit-slider-thumb {
-    width: 16px;
-    height: 16px;
-  }
-  
   .tick-row {
     position: relative;
     height: 10px;
@@ -521,11 +566,31 @@
     height: 4px;
     background: var(--color-text-muted);
   }
-  
+
   .tick-default {
     top: 50%;
     transform: translateY(-50%);
     height: 10px;
+  }
+
+  .slider-track {
+    max-width: 100%; /* redundant but is here for customization */
+  }
+
+  .slider-track input {
+    width: 100%;
+    margin: 0;
+  }
+
+  /* not working for some reason */
+  .slider-track input::-webkit-slider-thumb {
+    width: 16px;
+    height: 16px;
+  }
+
+  .reset-btn {
+    align-self: flex-end;
+    font-size: 12px;
   }
 
   .progress-bar {
