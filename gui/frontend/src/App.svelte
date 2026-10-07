@@ -30,7 +30,7 @@
   let maxSearchDistanceMs = searchDefault; // negative/positive range of offset values the engine will try
   let segmentDurationMinutes = segmentDefault; // length of a segment
 
-  // States
+  // GUI and engine states
   let running = false; // whether sync is currently running
   let progress = 0; // 0-100 for the progress bar
   let finishedAt = ""; // variable to store time when the sync engine finishes
@@ -50,7 +50,7 @@
     });
   });
 
-  // handleSelectVideo
+  // handleSelectVideo opens the file dialog for the user to select a video file.
   async function handleSelectVideo() {
     const path = await SelectVideo();
     if (path !== "") {
@@ -58,7 +58,8 @@
     }
   }
 
-  // handleSelectSubtitles
+  // handleSelectSubtitles opens the file dialog for the user to select at least one
+  // .ass subtitle to sync.
   async function handleSelectSubtitles() {
     const paths = await SelectSubtitles();
     if (paths.length > 0) {
@@ -66,7 +67,8 @@
     }
   }
 
-  // handleSelectOutputFolder
+  // handleSelectOutputFolder opens the directory dialog for the user to choose an
+  // output directory to place the synced files.
   async function handleSelectOutputFolder() {
     const outDirPath = await SelectOutputFolder();
     if (outDirPath !== "") {
@@ -74,7 +76,8 @@
     }
   }
 
-  // handleRunSync
+  // handleRunSync runs the sync engine on all the subtitles, populating the results array
+  // via the "sync:file-complete" event listener.
   async function handleRunSync() {
     // Check if videoPath or subPath is populated before running the sync engine
     if (videoPath === "") {
@@ -119,7 +122,8 @@
     segmentDurationMinutes = segmentDefault;
   }
 
-  // formatOffsetRange
+  // formatOffsetRange returns a string of the range of offset applied
+  // including the sign prefix and 'ms' suffix.
   function formatOffsetRange(minOffset, maxOffset) {
     const sign = (ms) => (ms > 0 ? "+" : "");
     if (minOffset === maxOffset) {
@@ -302,8 +306,9 @@
             />
           </div>
         </div>
-      <button class="btn-small reset-btn" on:click={handleResetAdvanced}
-        >Reset</button>
+        <button class="btn-small reset-btn" on:click={handleResetAdvanced}
+          >Reset</button
+        >
       </div>
     </div>
   {/if}

@@ -95,10 +95,10 @@ func ParseAssFile(filePath string) ([]DialogueLine, []string, error) {
 
 		// Filter out lines with environmental descriptions
 		cleanedText := CleanText(rawText)
-		isDialogueLine := true
+		isSpokenLine := true
 		if cleanedText == "" {
 			// Mark line as environmental descriptions so the math engine ignores it
-			isDialogueLine = false
+			isSpokenLine = false
 		}
 
 		// Convert the start and end timestamps to time.Duration
@@ -113,10 +113,10 @@ func ParseAssFile(filePath string) ([]DialogueLine, []string, error) {
 		}
 
 		lines = append(lines, DialogueLine{
-			Start:      start,
-			End:        end,
-			Text:       cleanedText,
-			IsDialogue: isDialogueLine,
+			Start:    start,
+			End:      end,
+			Text:     cleanedText,
+			IsSpoken: isSpokenLine,
 		})
 	}
 	// Return any errors (if any) that occured during the scanning

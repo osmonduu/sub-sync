@@ -28,7 +28,7 @@ func GenerateSubTimeline(dialoguelines []DialogueLine, resolution time.Duration)
 	// Populate the timeline with the DialogueLines
 	for _, line := range dialoguelines {
 		// Skip environmental subtitles when building the timeline
-		if !line.IsDialogue {
+		if !line.IsSpoken {
 			continue
 		}
 
