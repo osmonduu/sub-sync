@@ -35,7 +35,7 @@
   let progress = 0; // 0-100 for the progress bar
   let finishedAt = ""; // variable to store time when the sync engine finishes
   let extractingAudio = false; // event flag to indicate when the sync engine is extracting audio
-  let filesMissingError = ""; // error message shown to the user if they forget to add video or subtitle files
+  let errorMessage = ""; // message shown to the user if they forget to add video/subtitle file or ffmpeg is not installed and extraction fails
   let advancedOpen = false; // state of the collapsable advanced segment and search sliders
 
   onMount(() => {
@@ -81,15 +81,14 @@
   async function handleRunSync() {
     // Check if videoPath or subPath is populated before running the sync engine
     if (videoPath === "") {
-      filesMissingError = "Please add a video file before syncing.";
+      errorMessage = "Please add a video file before syncing.";
       return;
     }
     if (subPaths.length === 0) {
-      filesMissingError =
-        "Please add at least one subtitle file before syncing.";
+      errorMessage = "Please add at least one subtitle file before syncing.";
       return;
     }
-    filesMissingError = ""; // clear any previous error message before starting sync engine
+    errorMessage = ""; //clear any previous error message before starting sync engine
     results = []; // clear previous run output
     running = true;
 
@@ -101,6 +100,15 @@
         maxSearchDistanceMs,
         segmentDurationMinutes,
       );
+      // Check if RunSync failed to extract audio
+      const parsed = JSON.parse(syncResults);
+      if (
+        parsed.length > 0 &&
+        parsed[0].inputPath === "" &&
+        parsed[0].error != ""
+      ) {
+        errorMessage = parsed[0].error;
+      }
     } finally {
       running = false;
     }
@@ -114,6 +122,7 @@
     results = [];
     progress = 0;
     extractingAudio = false;
+    errorMessage = "";
   }
 
   // handleResetAdvanced resets the segment and search sliders back to default values.
@@ -142,9 +151,21 @@
     return ticks;
   }
 
-  // toggleAdvanced toggles the advancedOpen between true and false.
+  // toggleAdvanced toggles the advancedOpen flag between true and false which shows the advanced-panel.
   function toggleAdvanced() {
     advancedOpen = !advancedOpen;
+  }
+
+  // dismissError clears the error message which dismisses the error dialog pop up.
+  function dismissError() {
+    errorMessage = "";
+  }
+
+  // handleKeyDown calls dismissErorr to clear the erorr message whenever 'Esc' is pressed
+  function handleKeyDown(event) {
+    if (event.key === "Escape") {
+      dismissError();
+    }
   }
 </script>
 
@@ -306,7 +327,7 @@
             />
           </div>
         </div>
-        <button class="btn-small reset-btn" on:click={handleResetAdvanced}
+        <button class="btn-small btn-reset" on:click={handleResetAdvanced}
           >Reset</button
         >
       </div>
@@ -352,10 +373,19 @@
     <button class="btn-cancel" on:click={handleClear}>Clear</button>
     <button class="btn-sync" on:click={handleRunSync}>Sync all</button>
   </div>
-  {#if filesMissingError}
-    <p class="validation-error">{filesMissingError}</p>
+
+  {#if errorMessage}
+    <div class="error-popup" role="alertdialog" aria-modal="true">
+      <div class="error-box">
+        <p>{errorMessage}</p>
+        <button class="btn-small btn-dismiss" on:click={dismissError}
+          >Dismiss</button
+        >
+      </div>
+    </div>
   {/if}
 </div>
+<svelte:window on:keydown={handleKeyDown} />
 
 <!-- CSS -->
 <style>
@@ -392,6 +422,7 @@
   .btn-small {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
     /* background: var(--color-surface-2); */
     border: 1px solid var(--color-border);
@@ -593,7 +624,7 @@
     height: 16px;
   }
 
-  .reset-btn {
+  .btn-reset {
     align-self: flex-end;
     font-size: 12px;
   }
@@ -674,9 +705,30 @@
     padding: 6px 10px;
   }
 
-  .validation-error {
+  .error-popup {
+    position: fixed;
+    inset: 0;
+    background: rgb(0, 0, 0, 60%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 11;
+  }
+
+  .error-box {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    max-width: 50%;
+    gap: 10px;
     color: var(--color-danger);
     font-size: 16px;
-    text-align: right;
+    padding: 10px;
+  }
+
+  .btn-dismiss {
+    align-self: center;
   }
 </style>

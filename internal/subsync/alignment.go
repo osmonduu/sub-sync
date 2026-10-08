@@ -30,8 +30,7 @@ func FindBestOffset(
 	// Slide the subtitle timeline from -maxOffsetSlots to +maxOffsetSlots
 	for offsetSlots := -maxOffsetSlots; offsetSlots <= maxOffsetSlots; offsetSlots++ {
 		score := calculateOverlapScore(audioTimeline, subTimeline, offsetSlots)
-		fmt.Printf("Testing offset: %+d ms | Match score: %.2f\n", offsetSlots*100, score)
-
+		// fmt.Printf("Testing offset: %+d ms | Match score: %.2f\n", offsetSlots*100, score)
 		// If the offset yields a better match than previous attempts, save it
 		if score > bestMatchConfidence {
 			bestMatchConfidence = score
@@ -170,8 +169,8 @@ func computeSegmentOffsets(
 		centerSlot := start + (end-start)/2
 		centerTimestamp := time.Duration(centerSlot) * resolution
 
-		// DEBUG - REMOVE IN FINAL!!!!!!!!!!
-		fmt.Printf("Segment [%v]: best offset %v, confidence %.3f\n", centerTimestamp, time.Duration(bestOffsetSlots)*resolution, bestMatchConfidence)
+		// DEBUG
+		// fmt.Printf("Segment [%v]: best offset %v, confidence %.3f\n", centerTimestamp, time.Duration(bestOffsetSlots)*resolution, bestMatchConfidence)
 
 		// Only append to 'segments' if the score meets or exceeds the confidence threshold
 		if bestMatchConfidence < minConfidence {
