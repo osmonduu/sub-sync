@@ -107,7 +107,7 @@ func (a *App) RunSync(
 	if err != nil {
 		// If audio extraction fails, the whole batch fails
 		runtime.EventsEmit(a.ctx, "sync:extracting-audio", false)
-		return marshalError(fmt.Sprintf("failed to extract audio from video source: %v", err))
+		return marshalError(fmt.Sprintf("Failed to extract audio from video source: %v", err))
 	}
 	audioTimeline := subsync.GenerateAudioTimeline(audioSamples, 16000, resolution)
 	runtime.EventsEmit(a.ctx, "sync:extracting-audio", false)

@@ -4,7 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 )
 
 // ExtractAudio uses ffmpeg to stream raw audio samples from a video into
@@ -17,7 +20,7 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 	// -ar 16000: sample rate of 16kHz (16,000 measurements of the sound wave amplitude per second)
 	// -f s16le: raw 16-bit little-endian integers
 	// pipe:1: send the result to Go's stdout pipe instead of a file to keep it in memory
-	cmd := exec.Command("ffmpeg", "-i", videoPath, "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1")
+	cmd := exec.Command(findFFmpegPath(), "-i", videoPath, "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1")
 
 	// Connect to the command's stdout
 	stdout, err := cmd.StdoutPipe()
@@ -31,7 +34,7 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 	}
 
 	var samples []float64
-	const chunkSize = 64 *1024	// read 64KB at a time
+	const chunkSize = 64 * 1024 // read 64KB at a time
 	buffer := make([]byte, chunkSize)
 	for {
 		n, err := stdout.Read(buffer)
@@ -53,8 +56,31 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 
 	// Wait for the process to clean up
 	if err := cmd.Wait(); err != nil {
-		fmt.Printf("FFmpeg cleanup note: %v\n", err)
+		return nil, fmt.Errorf("FFmpeg cleanup note: %v\n", err)
 	}
 
 	return samples, nil
+}
+
+// findFfmpegPath tries to find ffmpeg bundled with the binary but defaults to look at PATH
+// if it fails.
+func findFFmpegPath() string {
+	// Get the path of the running binary so we can get the directory
+	binaryPath, err := os.Executable()
+	if err != nil {
+		return "ffmpeg"
+	}
+	dir := filepath.Dir(binaryPath)
+	filename := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		filename = "ffmpeg.exe"
+	}
+	path := filepath.Join(dir, filename)
+
+	// Check if file even exists and fall back to looking at PATH for ffmpeg if it doesn't
+	_, err = os.Stat(path)
+	if err == nil {
+		return path
+	}
+	return "ffmpeg"
 }
