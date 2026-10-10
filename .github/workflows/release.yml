@@ -1,0 +1,15 @@
+name: Release
+
+# Run only when started by hand from the Actions tab.
+on:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      # Download repo onto empty runner
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: List the files
+        run: ls -la 
