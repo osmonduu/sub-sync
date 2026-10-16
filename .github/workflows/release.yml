@@ -4,12 +4,34 @@ name: Release
 on:
   workflow_dispatch:
 
+env:
+  FFMPEG_MIRROR_TAG: deps-ffmpeg-n9.0.2-27-g7e93014c5b
+  FFMPEG_LINUX_ARCHIVE: ffmpeg-n9.0.2-27-g7e93014c5b-linux64-lgpl-9.0.tar.xz
+  FFMPEG_WIN_ARCHIVE: ffmpeg-n9.0.2-27-g7e93014c5b-win64-lgpl-9.0.zip
+
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
     steps:
       - name: Check out the repository
         uses: actions/checkout@v7
+
+      - name: Download archive from mirror
+        working-directory: third_party/ffmpeg/
+        run: curl -fLO "https://github.com/$GITHUB_REPOSITORY/releases/download/$FFMPEG_MIRROR_TAG/$FFMPEG_LINUX_ARCHIVE"
+      
+      - name: Verify checksum
+        working-directory: third_party/ffmpeg/
+        run: grep "$FFMPEG_LINUX_ARCHIVE" SHA256SUMS | sha256sum -c -
+
+      - name: Extract FFmpeg and license
+        working-directory: third_party/ffmpeg/
+        run: |
+          FOLDER_NAME=${FFMPEG_LINUX_ARCHIVE%.tar.xz}
+          tar -xf "$FFMPEG_LINUX_ARCHIVE" --strip-components=1 "$FOLDER_NAME/LICENSE.txt"
+          mv LICENSE.txt ffmpeg-LICENSE.txt
+          tar -xf "$FFMPEG_LINUX_ARCHIVE" --strip-components=2 "$FOLDER_NAME/bin/ffmpeg"
+          ./ffmpeg -L 2>/dev/null | head -4
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -27,18 +49,96 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Install the Wails CLI
-        run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+        
+      - name: Show Wails dependencies
+        shell: bash
+        continue-on-error: true
+        run: wails doctor
 
       - name: Build the app
-        working-directory: gui
+        working-directory: gui/
         run: wails build -tags webkit2_41
 
       - name: Show the output
         run: ls -la gui/build/bin
 
-      - name: Save the binary
+      - name: Assemble the Linux package
+        run: | 
+          mkdir -p dist/sub-sync/
+          cp gui/build/bin/sub-sync LICENSE third_party/ffmpeg/ffmpeg third_party/ffmpeg/ffmpeg-LICENSE.txt third_party/ffmpeg/NOTICE.md dist/sub-sync/
+          tar -cJf sub-sync-linux-amd64.tar.xz -C dist sub-sync
+          tar -tvf sub-sync-linux-amd64.tar.xz
+
+      - name: Save the tar file
         uses: actions/upload-artifact@v7
         with:
-          name: gui-linux
-          path: gui/build/bin/gui
+          name: sub-sync-linux
+          path: sub-sync-linux-amd64.tar.xz
+
+          
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v7
+
+      - name: Download archive from mirror
+        shell: bash
+        working-directory: third_party/ffmpeg/ 
+        run: curl -fLO "https://github.com/$GITHUB_REPOSITORY/releases/download/$FFMPEG_MIRROR_TAG/$FFMPEG_WIN_ARCHIVE"
+
+      - name: Verify checksum
+        shell: bash
+        working-directory: third_party/ffmpeg/
+        run: grep "$FFMPEG_WIN_ARCHIVE" SHA256SUMS | sha256sum -c -
+
+      - name: Extract FFmpeg and license
+        shell: bash
+        working-directory: third_party/ffmpeg/
+        run: |
+          FOLDER_NAME=${FFMPEG_WIN_ARCHIVE%.zip}
+          unzip -j "$FFMPEG_WIN_ARCHIVE" "$FOLDER_NAME/LICENSE.txt" "$FOLDER_NAME/bin/ffmpeg.exe"
+          mv LICENSE.txt ffmpeg-LICENSE.txt
+          ./ffmpeg.exe -L 2>/dev/null | head -4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+        
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install Wails CLI
+        shell: bash
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Show Wails dependencies
+        shell: bash
+        continue-on-error: true
+        run: wails doctor
+
+      - name: Build the app
+        working-directory: gui/
+        run: wails build
+
+      - name: Show the output
+        shell: bash
+        run: ls -la gui/build/bin
+
+      - name: Assemble the Windows package
+        shell: bash
+        run: |
+          mkdir -p dist/sub-sync/
+          cp gui/build/bin/sub-sync.exe LICENSE third_party/ffmpeg/ffmpeg.exe third_party/ffmpeg/ffmpeg-LICENSE.txt third_party/ffmpeg/NOTICE.md dist/sub-sync/
+          cd dist && 7z a -tzip ../sub-sync-windows-amd64.zip "sub-sync"
+          cd .. && 7z l sub-sync-windows-amd64.zip
+
+      - name: Save the zip file
+        uses: actions/upload-artifact@v7
+        with:
+          name: sub-sync-windows
+          path: sub-sync-windows-amd64.zip
