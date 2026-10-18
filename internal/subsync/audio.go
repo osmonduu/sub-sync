@@ -22,6 +22,10 @@ func ExtractAudio(videoPath string) ([]float64, error) {
 	// pipe:1: send the result to Go's stdout pipe instead of a file to keep it in memory
 	cmd := exec.Command(findFFmpegPath(), "-i", videoPath, "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1")
 
+	// For Windows only, make sure to set CREATE_NO_WINDOWS creation flag so no command prompt
+	// will flash when ffmpeg.exe is ran.
+	hideConsoleWindow(cmd)
+	
 	// Connect to the command's stdout
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
