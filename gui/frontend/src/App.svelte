@@ -20,7 +20,7 @@
   const searchMin = 500,
     searchMax = 10000,
     searchStep = 500,
-    searchDefault = 3000;
+    searchDefault = 5000;
   const searchTicks = buildTicks(searchMin, searchMax, searchStep);
   const segmentMin = 1,
     segmentMax = 15,
@@ -131,6 +131,11 @@
     segmentDurationMinutes = segmentDefault;
   }
 
+  // fileName returns the file name given the path
+  function fileName(path) {
+    return path.split(/[\\/]/).pop();
+  }
+
   // formatOffsetRange returns a string of the range of offset applied
   // including the sign prefix and 'ms' suffix.
   function formatOffsetRange(minOffset, maxOffset) {
@@ -187,7 +192,7 @@
       <span class="path-value">{outputFolder}</span>
     {:else}
       <span class="path-value"
-        >Default - synced_subtitles/ next to each input file</span
+        >Default: synced_subtitles/ next to each input file</span
       >
     {/if}
     <button class="btn-small" on:click={handleSelectOutputFolder}>Browse</button
@@ -206,10 +211,10 @@
         {#each subPaths as path}
           <div class="file-item">
             <i class="ti ti-file-text"></i>
-            <span class="file-name">{path.split("/").pop()}</span>
+            <span class="file-name">{fileName(path)}</span>
             <button
               class="remove-icon"
-              aria-label="Remove {path.split('/').pop()}"
+              aria-label="Remove {fileName(path)}"
               on:click={() => (subPaths = subPaths.filter((p) => p !== path))}
             >
               <i class="ti ti-x"></i>
@@ -232,7 +237,7 @@
           {@const result = results.find((r) => r.inputPath === path)}
           <div class="file-item">
             <i class="ti ti-file-text"></i>
-            <span class="file-name">{path.split("/").pop()}</span>
+            <span class="file-name">{fileName(path)}</span>
             {#if result === undefined}
               <span class="waiting">waiting...</span>
             {:else if result.error !== ""}
@@ -256,16 +261,30 @@
     <div class="advanced-panel">
       <div class="sliders">
         <div class="slider-group">
-          <p class="slider-header">
-            Segment Length: {segmentDurationMinutes} min
-            <span class="tooltip">
-              Shorter segment lengths track drift more closely but have fewer
-              subtitle lines which may tank the confidence score below the
-              threshold and get filtered instead. Longer segments have more
-              reliable confidence scores but average more of the file. Default:
-              5 min.
-            </span>
-          </p>
+          <div class="slider-title">
+            <p class="slider-header">
+              Segment Length: {segmentDurationMinutes} min
+              <span class="tooltip">
+                The engine splits the subtitles into segments of this length. For each segment,
+                it tries a range of offsets and keeps the one where the most subtible time overlaps
+                audible sound. Lines between two segments centers get a blend of their offsets.
+              </span>
+            </p>
+            <div class="help-anchor">
+              <button
+                class="icon-help"
+                aria-label="What does segment length change?"
+              >
+                <i class="ti ti-help"></i>
+              </button>
+              <span class="help-text">
+                Default: {segmentDefault} min.<br />
+                Shorter segments follow timing drift more closely, but each segment has fewer
+                lines to match, so a wrong offset is more liekly. Longer segments are steadier,
+                but one offset covers a longer stretch of time, so they follow drift less closely.
+              </span>
+            </div>
+          </div>
           <div class="slider-track">
             <div class="tick-row">
               {#each segmentTicks as tickValue}
@@ -293,15 +312,29 @@
         </div>
 
         <div class="slider-group">
-          <p class="slider-header">
-            Search Range: ±{maxSearchDistanceMs}ms
-            <span class="tooltip">
-              A narrower search range won't be able to catch true offsets larger
-              than the range itself. A wider range gives false matches of
-              subtitle to dialogue, making the offset much larger than the true
-              offset. Default: ±3000ms.
-            </span>
-          </p>
+          <div class="slider-title">
+            <p class="slider-header">
+              Search Range: ±{maxSearchDistanceMs} ms
+              <span class="tooltip">
+                For each segment, the engine tries each offset from -range to +range in 100 ms
+                steps and keeps the one that matches the audio best.
+              </span>
+            </p>
+            <div class="help-anchor">
+              <button
+                class="icon-help"
+                aria-label="What does search range change?"
+              >
+                <i class="ti ti-help"></i>
+              </button>
+              <span class="help-text">
+                Default: ±{searchDefault} ms.<br />
+                A smaller range can't find an offset larger than the range, and the engine then
+                picks a wrong, smaller offset without warning. A larger range find bigger offsets,
+                but it has more changes to match the wrong line of dialogue.
+              </span>
+            </div>
+          </div>
           <div class="slider-track">
             <div class="tick-row">
               {#each searchTicks as tickValue}
@@ -358,7 +391,7 @@
     {#each results as result}
       <div class="log-line">
         <span class="log-time">{result.completedAt}</span>
-        <span>{result.inputPath.split("/").pop()}</span>
+        <span>{fileName(result.inputPath)}</span>
         <span class={result.error === "" ? "log-success" : "log-error"}>
           {result.error === ""
             ? formatOffsetRange(result.minOffset, result.maxOffset) +
@@ -560,13 +593,20 @@
     gap: 4px;
   }
 
+  .slider-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .slider-header {
     position: relative;
     cursor: help;
     width: fit-content;
   }
 
-  .tooltip {
+  .tooltip,
+  .help-text {
     visibility: hidden;
     opacity: 0;
     position: absolute;
@@ -584,6 +624,29 @@
   }
 
   .slider-header:hover .tooltip {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .help-anchor {
+    position: relative;
+  }
+
+  /* same as .advanced-header except for cursor: help */
+  .icon-help {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: help;
+  }
+
+  .help-anchor:hover .help-text {
     visibility: visible;
     opacity: 1;
   }

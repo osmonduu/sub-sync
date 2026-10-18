@@ -2,6 +2,7 @@ package subsync
 
 import (
 	// "fmt"
+
 	"math"
 	"time"
 )
@@ -13,7 +14,7 @@ type segmentResult struct {
 }
 
 const (
-	minConfidence   = 0.3 // segments below this threshold are exclueded from interpolation
+	minConfidence = 0.3 // segments below this threshold are exclueded from interpolation
 )
 
 // FindBestOffset compares the subtitle timeline against the reference audio timeline.

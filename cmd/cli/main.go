@@ -16,7 +16,7 @@ func main() {
 	videoPath := flag.String("video", "", "Path to input video file")
 	maxSearchDistanceMs := flag.Int(
 		"search", 
-		3000, 
+		5000, 
 		"The range, in milliseconds, that the engine searches to find the best offset (default: 3000 ms). " + 
 		"Larger values will result in more inaccurate results.",
 	)
@@ -36,7 +36,7 @@ func main() {
 	fmt.Println("Starting alignment engine...")
 
 	resolution := 100 * time.Millisecond
-	maxSearchDistanceSlots := *maxSearchDistanceMs / 100 // search area in terms of slots (3000 / 100ms = 30 slots)
+	maxSearchDistanceSlots := *maxSearchDistanceMs / 100 // search area in terms of slots (5000 / 100ms = 50 slots)
 	segmentDurationMinutes := time.Duration(*segmentDuration) * time.Minute
 
 	// Extract audio and run the VAD (voice activity detection)
