@@ -1,8 +1,10 @@
 name: Release
 
-# Run only when started by hand from the Actions tab.
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "v*"
 
 env:
   FFMPEG_MIRROR_TAG: deps-ffmpeg-n9.0.2-27-g7e93014c5b
@@ -142,3 +144,30 @@ jobs:
         with:
           name: sub-sync-windows
           path: sub-sync-windows-amd64.zip
+          
+
+  release:
+    needs: [build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: List the artifact paths
+        run: ls -R artifacts 
+        
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create $GITHUB_REF_NAME \
+          artifacts/sub-sync-linux/sub-sync-linux-amd64.tar.xz \
+          artifacts/sub-sync-windows/sub-sync-windows-amd64.zip \
+          --title "$GITHUB_REF_NAME" \
+          --generate-notes
