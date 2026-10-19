@@ -8,6 +8,7 @@ type DialogueLine struct {
 	End      time.Duration
 	Text     string
 	IsSpoken bool // flag to indicate whether this dialogue line is spoken or environmental dialogue
+	RawIdx   int  // index in rawLines (array of all lines in the .ass file, used to rebuild the file with applied offsets)
 }
 
 // AlignedLine inherets DialogueLine along with the subtitle line's unique calculated offset.

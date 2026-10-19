@@ -117,6 +117,7 @@ func ParseAssFile(filePath string) ([]DialogueLine, []string, error) {
 			End:      end,
 			Text:     cleanedText,
 			IsSpoken: isSpokenLine,
+			RawIdx:   len(rawLines) - 1,
 		})
 	}
 	// Return any errors (if any) that occured during the scanning
@@ -130,19 +131,24 @@ func SaveSyncedAssFile(outputPath string, rawLines []string, alignedLines []Alig
 		return err
 	}
 	defer file.Close()
+	
+	// Map all AlignedLines to their index in rawLines
+	alignedRawLines := make(map[int]AlignedLine)
+	for _, aligned := range alignedLines {
+		alignedRawLines[aligned.Dialogue.RawIdx] = aligned
+	}
 
 	writer := bufio.NewWriter(file)
-	dialogueIdx := 0
-
-	for _, rawLine := range rawLines {
-		// If it isn't a Dialogue line, write the original raw text back out.
-		if !strings.HasPrefix(rawLine, "Dialogue:") || dialogueIdx >= len(alignedLines) {
+	
+	for i, rawLine := range rawLines {
+		currentAligned, ok := alignedRawLines[i]
+		// If the line is not in the Dialogue section or is malformed,
+		// write the raw line back out.
+		if !ok {
 			writer.WriteString(rawLine)
 			writer.WriteString("\n")
 			continue
 		}
-		currentAligned := alignedLines[dialogueIdx]
-		dialogueIdx++
 
 		// Calculate the new timestamps with this line's own interpolated offset applied
 		newStart := currentAligned.Dialogue.Start + currentAligned.Offset
@@ -152,11 +158,6 @@ func SaveSyncedAssFile(outputPath string, rawLines []string, alignedLines []Alig
 		// .ass dialogue lines format: Diallogue: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 		// Keep the text part whole so split into 10 substrings
 		parts := strings.SplitN(rawLine, ",", 10)
-		if len(parts) < 10 {
-			writer.WriteString(rawLine)
-			writer.WriteString("\n")
-			continue
-		}
 
 		// Update the start and end timestamps
 		parts[1] = FormatAssTimestamp(newStart)
