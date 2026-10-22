@@ -1,5 +1,7 @@
 # sub-sync
-An application that syncs mistimed Advanced SubStation Alpha (`.ass`) subtitles to a video. The engine compares subtitle timing with detected speech, applying the best offset to each subtitle line. It can handle constant global shift and offset drift.
+An application that syncs mistimed Advanced SubStation Alpha (`.ass`) subtitles to a video. The engine compares subtitle timing with detected speech, applying the best offset to each subtitle line. It can handle constant global shift and offset drift.  
+
+![sub-sync screenshot](assets/images/sub-sync.png)
 
 ## Download and run
 Download the corresponding archive from the latest [release](https://github.com/osmonduu/sub-sync/releases).
