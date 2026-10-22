@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"path/filepath"
 
 	"github.com/osmonduu/sub-sync/internal/subsync"
 )
@@ -19,7 +20,7 @@ type Checkpoint struct {
 
 func main() {
 	input := flag.String("input", "", "Path to input .ass file")
-	output := flag.String("output", "", "Name for ouput .ass file")
+	output := flag.String("output", "", "Path for ouput .ass file")
 	mode := flag.String("mode", "global", "Sabotage mode: global, step, or ramp")
 	offset := flag.Int("offset", 0, "Offset in milliseconds to apply")
 	checkpoints := flag.String(
@@ -29,36 +30,72 @@ func main() {
 	)
 	flag.Parse()
 
-	if *input == "" || *output == "" {
+	// Immediately exit if there is no input file
+	if *input == "" {
 		fmt.Fprintln(
 			os.Stderr,
-			"Usage: sabotage -input <file.ass> -output <file.ass> -mode <global/step/ramp> -offset <milliseconds> -checkpoints <timestamp:offset>",
+			"usage: sabotage -input <file.ass> -output <file.ass> -mode <global/step/ramp> -offset <milliseconds> -checkpoints <timestamp:offset>",
 		)
 		os.Exit(1)
 	}
 
+	// If no output filepath is provided, create a new filepath using the input and mode
+	if *output == "" {
+		newOutput, err := buildOutputPath(*input, *mode, *offset)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		*output = newOutput
+	}
+
+	// Based on the mode, apply the offset to the input and write out to output
 	switch *mode {
 	case "global":
 		err := sabotageGlobal(*input, *output, *offset)
 		if err != nil {
-			fmt.Println("Error: ", err)
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	case "step", "ramp":
 		checkpointArr, err := parseCheckpoints(*checkpoints)
 		if err != nil {
-			fmt.Println("Error: ", err)
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		err = sabotageCheckpoints(*mode, *input, *output, checkpointArr)
 		if err != nil {
-			fmt.Println("Error: ", err)
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	default:
-		fmt.Println("Unknown mode. Please use global, step, or ramp")
+		fmt.Fprintln(os.Stderr, "unknown mode: please use global, step, or ramp")
 		os.Exit(1)
 	}
+}
+
+// buildOutputPath builds the output filepath using the input filename as the base and the
+// mode as the suffix. The offset is only used when the mode is global. The caller uses
+// it only when the -output flag is empty.
+func buildOutputPath(input string, mode string, offset int) (string, error) {
+	dir, file := filepath.Split(input)
+	ext := filepath.Ext(file)
+	fileName := strings.TrimSuffix(file, ext)
+	var outputFile string
+	switch mode {
+	case "global":
+		offsetSuffix := fmt.Sprintf("%+d", offset)
+		outputFile = fileName + "_sabotaged_global_" + offsetSuffix + "ms" + ext
+	case "step":
+		outputFile = fileName + "_sabotaged_step" + ext
+	case "ramp":
+		outputFile = fileName + "_sabotaged_ramp" + ext
+	default:
+		return "", errors.New("unknown mode: please use global, step, or ramp")
+	}
+	
+	// Build and return the filepath using the input dir
+	return filepath.Join(dir, outputFile), nil
 }
 
 // parseCheckpoints checks if the "checkpoints" string is correctly formatted

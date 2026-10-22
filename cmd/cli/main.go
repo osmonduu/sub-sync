@@ -17,7 +17,7 @@ func main() {
 	maxSearchDistanceMs := flag.Int(
 		"search", 
 		5000, 
-		"The range, in milliseconds, that the engine searches to find the best offset (default: 3000 ms). " + 
+		"The range, in milliseconds, that the engine searches to find the best offset (default: 5000 ms). " + 
 		"Larger values will result in more inaccurate results.",
 	)
 	segmentDuration := flag.Int(
@@ -29,7 +29,16 @@ func main() {
 	flag.Parse()
 
 	if *subPath == "" || *videoPath == "" {
-		fmt.Fprintln(os.Stderr, "Usage: sub-sync -sub <file.ass> -video <file.mp4>")
+		fmt.Fprintln(os.Stderr, "usage: sub-sync -sub <file.ass> -video <file.mp4>")
+		os.Exit(1)
+	}
+
+	if *maxSearchDistanceMs < 0 {
+		fmt.Fprintln(os.Stderr, "search range cannot be negative")
+		os.Exit(1)
+	}
+	if *segmentDuration < 0 {
+		fmt.Fprintln(os.Stderr, "segment length cannot be negative")
 		os.Exit(1)
 	}
 

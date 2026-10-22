@@ -1,5 +1,5 @@
 sabotage
-sub-sync
+sub-sync-cli
 *.exe
 *.wav
 *.ass
